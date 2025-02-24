@@ -1,87 +1,90 @@
-# app.py
 from flask import Flask, request, jsonify
-from supabase import create_client, Client
 from dotenv import load_dotenv
-from flask_cors import CORS  # Import CORS
+from urllib.parse import urlparse
+import requests
 import os
+import logging
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_cors import CORS
+from flask_talisman import Talisman
+
 # Load environment variables
 load_dotenv()
 
+# Initialize Flask app
 app = Flask(__name__)
+CORS(app)
+Talisman(app)
 
-CORS(app)  # This will allow all domains, you can restrict it if needed
-# Supabase client
-supabase_url = os.getenv('SUPABASE_URL')
-supabase_key = os.getenv('SUPABASE_KEY')
-supabase: Client = create_client(supabase_url, supabase_key)
+# Rate limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
 
-# Register endpoint
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.get_json()
-    name = data.get('name')
-    email = data.get('email')
-    password = data.get('password')
+# RapidAPI credentials
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST")
+RAPIDAPI_URL = "https://all-media-downloader1.p.rapidapi.com/all"
 
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Helper function to validate URLs
+def is_valid_url(url):
     try:
-        # Sign up the user with Supabase Auth
-        auth_response = supabase.auth.sign_up({
-            'email': email,
-            'password': password,
-        })
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except:
+        return False
 
-        # Save additional user data to the profiles table
-        supabase.table('profiles').insert({
-            'id': auth_response.user.id,
-            'name': name,
-            'email': email,
-        }).execute()
-
-        return jsonify({'message': 'Registration successful'}), 201
-    except Exception as e:
-        return jsonify({'message': str(e)}), 400
-
-# Login endpoint
-@app.route('/login', methods=['POST'])
-def login():
-    data = request.get_json()
-    email = data.get('email')
-    password = data.get('password')
-
+@app.route('/download', methods=['POST'])
+@limiter.limit("10 per minute")  # Rate limit for this endpoint
+def download_media():
+    """
+    Endpoint to handle media download requests.
+    """
     try:
-        # Sign in the user with Supabase Auth
-        auth_response = supabase.auth.sign_in_with_password({
-            'email': email,
-            'password': password,
-        })
+        # Get the URL from the client request
+        video_url = request.form.get('url')
 
-        return jsonify({
-            'message': 'Login successful',
-            'token': auth_response.session.access_token,
-        }), 200
+        # Validate the URL
+        if not video_url or not is_valid_url(video_url):
+            logger.error("Invalid or missing URL")
+            return jsonify({"error": "A valid URL is required"}), 400
+
+        # Log the request
+        logger.info(f"Processing request for URL: {video_url}")
+
+        # Prepare the payload and headers for the RapidAPI request
+        payload = f"url={video_url}"
+        headers = {
+            'x-rapidapi-key': RAPIDAPI_KEY,
+            'x-rapidapi-host': RAPIDAPI_HOST,
+            'Content-Type': "application/x-www-form-urlencoded"
+        }
+
+        # Make the request to RapidAPI
+        response = requests.post(RAPIDAPI_URL, data=payload, headers=headers)
+        logger.info(f"RapidAPI response status: {response.status_code}")
+
+        # Check if the request was successful
+        if response.status_code == 200:
+            return jsonify(response.json()), 200
+        else:
+            logger.error(f"RapidAPI request failed: {response.status_code}")
+            return jsonify({"error": "Failed to fetch data from RapidAPI", "status_code": response.status_code}), response.status_code
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error: {str(e)}")
+        return jsonify({"error": "Network error occurred", "details": str(e)}), 500
     except Exception as e:
-        return jsonify({'message': str(e)}), 400
+        logger.error(f"Unexpected error: {str(e)}")
+        return jsonify({"error": "An unexpected error occurred", "details": str(e)}), 500
 
-# Profile endpoint
-@app.route('/profile', methods=['GET'])
-def profile():
-    token = request.headers.get('Authorization')
-
-    try:
-        # Get the user from the token
-        user = supabase.auth.get_user(token)
-
-        # Fetch user details from the profiles table
-        profile_data = supabase.table('profiles') \
-            .select('name, email') \
-            .eq('id', user.user.id) \
-            .single() \
-            .execute()
-
-        return jsonify(profile_data.data), 200
-    except Exception as e:
-        return jsonify({'message': str(e)}), 401
-
-# Run the server
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Run the app in production mode
+    app.run(host='0.0.0.0', port=5000)
