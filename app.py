@@ -1,10 +1,8 @@
 from flask import Flask, request, jsonify
-from dotenv import load_dotenv
-from urllib.parse import urlparse
-import requests
-import os
-import logging
 from flask_cors import CORS
+from groq import Groq
+from dotenv import load_dotenv
+import os
 
 # Load environment variables
 load_dotenv()
@@ -13,85 +11,83 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# RapidAPI credentials
-RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-RAPIDAPI_HOST = "all-media-downloader1.p.rapidapi.com"
-RAPIDAPI_URL = "https://all-media-downloader1.p.rapidapi.com/all"
+# Initialize Groq client
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY environment variable is not set.")
+client = Groq(api_key=GROQ_API_KEY)
 
-# Logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# System prompt for NexusAI
+SYSTEM_PROMPT = """
+You are NexusAI, an intelligent and informative AI assistant created by Alvee Mahmud, a talented developer from Bangladesh. 
+Your purpose is to assist users with accurate, detailed, and helpful information on a wide range of topics, including:
+- Technology
+- Science
+- Business
+- Education
+- Health
+- General knowledge
 
-# Helper function to validate URLs
-def is_valid_url(url):
+Always respond in a friendly, professional, and approachable tone. If the user asks for help, provide clear and actionable advice. 
+If you don't know the answer, be honest and let the user know. 
+Encourage users to ask follow-up questions and strive to make every interaction informative and engaging.
+"""
+
+# Function to generate AI response using Groq API
+def generate_ai_response(user_message):
     try:
-        result = urlparse(url)
-        # Check if the URL has a scheme (http/https) and a netloc (domain)
-        if all([result.scheme, result.netloc]):
-            return True
-        return False
-    except:
-        return False
-
-@app.route('/download', methods=['POST'])
-def download_media():
-    """
-    Endpoint to handle media download requests.
-    """
-    try:
-        # Get the URL from the client request
-        video_url = request.form.get('url')
-
-        # Validate the URL
-        if not video_url or not is_valid_url(video_url):
-            logger.error("Invalid or missing URL")
-            return jsonify({"error": "A valid URL is required"}), 400
-
-        # Log the request
-        logger.info(f"Processing request for URL: {video_url}")
-
-        # Prepare the headers and payload for the RapidAPI request
-        headers = {
-            "x-rapidapi-key": RAPIDAPI_KEY,
-            "x-rapidapi-host": RAPIDAPI_HOST,
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        payload = {"url": video_url}
-
-        # Make the request to RapidAPI
-        response = requests.post(RAPIDAPI_URL, data=payload, headers=headers)
-        logger.info(f"RapidAPI response status: {response.status_code}")
-        logger.info(f"RapidAPI response: {response.text}")  # Log the full response
-
-        # Check if the request was successful
-        if response.status_code == 200:
-            data = response.json()
-
-            # Debug: Log the entire response
-            logger.info(f"Full RapidAPI response: {data}")
-
-            # Extract the video URL from the RapidAPI response
-            if "download_url" in data:
-                return jsonify({
-                    "status": "success",
-                    "data": {
-                        "download_url": data["download_url"]  # Use download_url here
-                    }
-                }), 200
-            else:
-                logger.error("No download URL found in RapidAPI response")
-                return jsonify({"error": "No download URL found", "response": data}), 404
-        else:
-            logger.error(f"RapidAPI request failed: {response.status_code}")
-            return jsonify({"error": "Failed to fetch data from RapidAPI", "status_code": response.status_code}), response.status_code
-
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Network error: {str(e)}")
-        return jsonify({"error": "Network error occurred", "details": str(e)}), 500
+        # Send the user message to Groq API
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",  # Use the Llama 3 model
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message}
+            ],
+            temperature=0.7,  # Adjust for creativity
+            max_tokens=1024,   # Limit response length
+        )
+        # Extract the AI's response
+        return response.choices[0].message.content
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return jsonify({"error": "An unexpected error occurred", "details": str(e)}), 500
+        print(f"Error generating AI response: {e}")
+        return "Sorry, I encountered an error while processing your request."
+
+# Route to handle chat messages
+@app.route('/send_message', methods=['POST'])
+def send_message():
+    # Validate request
+    if not request.is_json:
+        return jsonify({'error': 'Request must be JSON'}), 400
+
+    data = request.json
+    user_message = data.get('message', '').strip()
+
+    if not user_message:
+        return jsonify({'error': 'Message cannot be empty'}), 400
+
+    # Generate AI response
+    ai_response = generate_ai_response(user_message)
+
+    # Return response
+    return jsonify({
+        'user_message': user_message,
+        'ai_response': ai_response
+    })
+
+# Health check endpoint
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({'status': 'healthy'}), 200
+
+# Error handler for 404
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'Resource not found'}), 404
+
+# Error handler for 500
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
-    # Run the app in production mode
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True)
