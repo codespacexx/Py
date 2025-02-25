@@ -15,8 +15,8 @@ CORS(app)  # Enable CORS for all routes
 
 # RapidAPI credentials
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST")
-RAPIDAPI_URL = "https://all-media-downloader1.p.rapidapi.com/all"
+RAPIDAPI_HOST = "instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com"
+RAPIDAPI_URL = "https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/get-info-rapidapi"
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -47,16 +47,15 @@ def download_media():
         # Log the request
         logger.info(f"Processing request for URL: {video_url}")
 
-        # Prepare the payload and headers for the RapidAPI request
-        payload = f"url={video_url}"
+        # Prepare the headers and query parameters for the RapidAPI request
         headers = {
-            'x-rapidapi-key': RAPIDAPI_KEY,
-            'x-rapidapi-host': RAPIDAPI_HOST,
-            'Content-Type': "application/x-www-form-urlencoded"
+            "x-rapidapi-key": RAPIDAPI_KEY,
+            "x-rapidapi-host": RAPIDAPI_HOST
         }
+        querystring = {"url": video_url}
 
-        # Make the request to RapidAPI with a timeout
-        response = requests.post(RAPIDAPI_URL, data=payload, headers=headers, timeout=10)
+        # Make the request to RapidAPI
+        response = requests.get(RAPIDAPI_URL, headers=headers, params=querystring)
         logger.info(f"RapidAPI response status: {response.status_code}")
         logger.info(f"RapidAPI response: {response.text}")
 
@@ -64,17 +63,17 @@ def download_media():
         if response.status_code == 200:
             data = response.json()
 
-            # Extract the download link from the RapidAPI response
-            if "video_url" in data:
+            # Extract the video URL from the RapidAPI response
+            if "video" in data:
                 return jsonify({
                     "status": "success",
                     "data": {
-                        "video_url": data["video_url"]
+                        "video_url": data["video"]
                     }
                 }), 200
             else:
-                logger.error("No download link found in RapidAPI response")
-                return jsonify({"error": "No download link found"}), 404
+                logger.error("No video URL found in RapidAPI response")
+                return jsonify({"error": "No video URL found"}), 404
         else:
             logger.error(f"RapidAPI request failed: {response.status_code}")
             return jsonify({"error": "Failed to fetch data from RapidAPI", "status_code": response.status_code}), response.status_code
