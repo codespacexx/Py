@@ -15,8 +15,8 @@ CORS(app)  # Enable CORS for all routes
 
 # RapidAPI credentials
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-RAPIDAPI_HOST = "instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com"
-RAPIDAPI_URL = "https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/get-info-rapidapi"
+RAPIDAPI_HOST = "all-media-downloader1.p.rapidapi.com"
+RAPIDAPI_URL = "https://all-media-downloader1.p.rapidapi.com/all"
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -28,9 +28,7 @@ def is_valid_url(url):
         result = urlparse(url)
         # Check if the URL has a scheme (http/https) and a netloc (domain)
         if all([result.scheme, result.netloc]):
-            # Check if the domain is Instagram
-            if "instagram.com" in result.netloc:
-                return True
+            return True
         return False
     except:
         return False
@@ -52,15 +50,16 @@ def download_media():
         # Log the request
         logger.info(f"Processing request for URL: {video_url}")
 
-        # Prepare the headers and query parameters for the RapidAPI request
+        # Prepare the headers and payload for the RapidAPI request
         headers = {
             "x-rapidapi-key": RAPIDAPI_KEY,
-            "x-rapidapi-host": RAPIDAPI_HOST
+            "x-rapidapi-host": RAPIDAPI_HOST,
+            "Content-Type": "application/x-www-form-urlencoded"
         }
-        querystring = {"url": video_url}
+        payload = {"url": video_url}
 
         # Make the request to RapidAPI
-        response = requests.get(RAPIDAPI_URL, headers=headers, params=querystring)
+        response = requests.post(RAPIDAPI_URL, data=payload, headers=headers)
         logger.info(f"RapidAPI response status: {response.status_code}")
         logger.info(f"RapidAPI response: {response.text}")  # Log the full response
 
@@ -72,11 +71,11 @@ def download_media():
             logger.info(f"Full RapidAPI response: {data}")
 
             # Extract the video URL from the RapidAPI response
-            if "download_url" in data:
+            if "video_url" in data:
                 return jsonify({
                     "status": "success",
                     "data": {
-                        "video_url": data["download_url"]
+                        "video_url": data["video_url"]
                     }
                 }), 200
             else:
