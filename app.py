@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
 import os
-import requests
 
 # Load environment variables
 load_dotenv()
@@ -11,16 +12,16 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# Groq API endpoint and headers
-GROQ_API_URL = "https://api.groq.com/v1/chat/completions"
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY environment variable is not set.")
+# Load Hugging Face model and tokenizer
+MODEL_NAME = "meta-llama/Llama-2-7b-chat-hf"  # Replace with your desired Llama 2 model
+HUGGING_FACE_TOKEN = os.getenv("HUGGING_FACE_TOKEN")  # Hugging Face API token
 
-headers = {
-    "Authorization": f"Bearer {GROQ_API_KEY}",
-    "Content-Type": "application/json"
-}
+if not HUGGING_FACE_TOKEN:
+    raise ValueError("HUGGING_FACE_TOKEN environment variable is not set.")
+
+# Load the tokenizer and model
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_auth_token=HUGGING_FACE_TOKEN)
+model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, use_auth_token=HUGGING_FACE_TOKEN)
 
 # System prompt for NexusAI
 SYSTEM_PROMPT = """
@@ -38,26 +39,31 @@ If you don't know the answer, be honest and let the user know.
 Encourage users to ask follow-up questions and strive to make every interaction informative and engaging.
 """
 
-# Function to generate AI response using Groq API
+# Function to generate AI response using Hugging Face Llama 2
 def generate_ai_response(user_message):
     try:
-        # Prepare the request payload
-        payload = {
-            "model": "llama3-8b-8192",  # Use the Llama 3 model
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message}
-            ],
-            "temperature": 0.7,  # Adjust for creativity
-            "max_tokens": 1024   # Limit response length
-        }
+        # Prepare the input prompt
+        prompt = f"{SYSTEM_PROMPT}\n\nUser: {user_message}\nNexusAI:"
 
-        # Send the request to Groq API
-        response = requests.post(GROQ_API_URL, headers=headers, json=payload)
-        response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
+        # Tokenize the input
+        inputs = tokenizer(prompt, return_tensors="pt")
 
-        # Extract the AI's response
-        return response.json()["choices"][0]["message"]["content"]
+        # Generate the response
+        with torch.no_grad():
+            outputs = model.generate(
+                inputs.input_ids,
+                max_length=1024,  # Adjust response length
+                temperature=0.7,  # Adjust for creativity
+                top_p=0.9,        # Adjust for diversity
+                do_sample=True,
+            )
+
+        # Decode the response
+        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        # Extract only the assistant's response
+        response = response.split("NexusAI:")[-1].strip()
+        return response
     except Exception as e:
         print(f"Error generating AI response: {e}")
         return "Sorry, I encountered an error while processing your request."
