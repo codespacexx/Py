@@ -63,12 +63,22 @@ def download_media():
         if response.status_code == 200:
             data = response.json()
 
+            # Debug: Log the entire response
+            logger.info(f"Full RapidAPI response: {data}")
+
             # Extract the video URL from the RapidAPI response
             if "video" in data:
                 return jsonify({
                     "status": "success",
                     "data": {
                         "video_url": data["video"]
+                    }
+                }), 200
+            elif "url" in data:  # Check for alternative field
+                return jsonify({
+                    "status": "success",
+                    "data": {
+                        "video_url": data["url"]
                     }
                 }), 200
             else:
