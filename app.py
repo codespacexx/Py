@@ -4,25 +4,14 @@ from urllib.parse import urlparse
 import requests
 import os
 import logging
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from flask_cors import CORS
-from flask_talisman import Talisman
 
 # Load environment variables
 load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
-Talisman(app)
-
-# Rate limiting
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
-)
+CORS(app)  # Enable CORS for all routes
 
 # RapidAPI credentials
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
@@ -42,7 +31,6 @@ def is_valid_url(url):
         return False
 
 @app.route('/download', methods=['POST'])
-@limiter.limit("10 per minute")  # Rate limit for this endpoint
 def download_media():
     """
     Endpoint to handle media download requests.
@@ -67,13 +55,26 @@ def download_media():
             'Content-Type': "application/x-www-form-urlencoded"
         }
 
-        # Make the request to RapidAPI
-        response = requests.post(RAPIDAPI_URL, data=payload, headers=headers)
+        # Make the request to RapidAPI with a timeout
+        response = requests.post(RAPIDAPI_URL, data=payload, headers=headers, timeout=10)
         logger.info(f"RapidAPI response status: {response.status_code}")
+        logger.info(f"RapidAPI response: {response.text}")
 
         # Check if the request was successful
         if response.status_code == 200:
-            return jsonify(response.json()), 200
+            data = response.json()
+
+            # Extract the download link from the RapidAPI response
+            if "video_url" in data:
+                return jsonify({
+                    "status": "success",
+                    "data": {
+                        "video_url": data["video_url"]
+                    }
+                }), 200
+            else:
+                logger.error("No download link found in RapidAPI response")
+                return jsonify({"error": "No download link found"}), 404
         else:
             logger.error(f"RapidAPI request failed: {response.status_code}")
             return jsonify({"error": "Failed to fetch data from RapidAPI", "status_code": response.status_code}), response.status_code
