@@ -1,18 +1,14 @@
 import requests
 
-url = "https://all-media-downloader1.p.rapidapi.com/all"
+url = "https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/get-info-rapidapi"
 
-payload = { "url": "https://youtu.be/S-2oxLCkm2Y?si=6MxJkauRpophIVeN" }
+querystring = {"url":"https://www.instagram.com/reel/C1U6tQLu1vv/"}
+
 headers = {
-    "x-rapidapi-key": "9c744b1e04msh43b2dea878f2e0ep196409jsn715043e55446",
-    "x-rapidapi-host": "all-media-downloader1.p.rapidapi.com",
-    "Content-Type": "application/x-www-form-urlencoded"
+	"x-rapidapi-key": "9c744b1e04msh43b2dea878f2e0ep196409jsn715043e55446",
+	"x-rapidapi-host": "instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com"
 }
 
-try:
-    response = requests.post(url, data=payload, headers=headers)
-    response.raise_for_status()  # Raise an exception for HTTP errors
-    data = response.json()
-    print("RapidAPI Response:", data)
-except requests.exceptions.RequestException as e:
-    print("Error making request to RapidAPI:", e)
+response = requests.get(url, headers=headers, params=querystring)
+
+print(response.json())
