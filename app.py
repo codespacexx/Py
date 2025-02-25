@@ -26,7 +26,12 @@ logger = logging.getLogger(__name__)
 def is_valid_url(url):
     try:
         result = urlparse(url)
-        return all([result.scheme, result.netloc])
+        # Check if the URL has a scheme (http/https) and a netloc (domain)
+        if all([result.scheme, result.netloc]):
+            # Check if the domain is Instagram
+            if "instagram.com" in result.netloc:
+                return True
+        return False
     except:
         return False
 
@@ -36,8 +41,11 @@ def download_media():
     Endpoint to handle media download requests.
     """
     try:
-        # Get the URL from the client request
-        video_url = request.form.get('url')
+        # Hardcoded URL for testing
+        video_url = "https://www.instagram.com/reel/DGX0zfxCVjm/?igsh=M3UybjN6djJoc283"
+
+        # Log the hardcoded URL
+        logger.info(f"Using hardcoded URL: {video_url}")
 
         # Validate the URL
         if not video_url or not is_valid_url(video_url):
@@ -89,7 +97,6 @@ def download_media():
                     }
                 }), 200
             else:
-                # If no video URL is found, log the entire response for debugging
                 logger.error("No video URL found in RapidAPI response")
                 return jsonify({"error": "No video URL found", "response": data}), 404
         else:
