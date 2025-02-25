@@ -1,8 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from groq import Groq
 from dotenv import load_dotenv
 import os
+import requests
 
 # Load environment variables
 load_dotenv()
@@ -11,13 +11,16 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# Initialize Groq client
+# Groq API endpoint and headers
+GROQ_API_URL = "https://api.groq.com/v1/chat/completions"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY environment variable is not set.")
 
-# Initialize Groq client (ensure no extra arguments like 'proxies' are passed)
-client = Groq(api_key=GROQ_API_KEY)
+headers = {
+    "Authorization": f"Bearer {GROQ_API_KEY}",
+    "Content-Type": "application/json"
+}
 
 # System prompt for NexusAI
 SYSTEM_PROMPT = """
@@ -38,18 +41,23 @@ Encourage users to ask follow-up questions and strive to make every interaction 
 # Function to generate AI response using Groq API
 def generate_ai_response(user_message):
     try:
-        # Send the user message to Groq API
-        response = client.chat.completions.create(
-            model="llama3-8b-8192",  # Use the Llama 3 model
-            messages=[
+        # Prepare the request payload
+        payload = {
+            "model": "llama3-8b-8192",  # Use the Llama 3 model
+            "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message}
             ],
-            temperature=0.7,  # Adjust for creativity
-            max_tokens=1024,   # Limit response length
-        )
+            "temperature": 0.7,  # Adjust for creativity
+            "max_tokens": 1024   # Limit response length
+        }
+
+        # Send the request to Groq API
+        response = requests.post(GROQ_API_URL, headers=headers, json=payload)
+        response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
+
         # Extract the AI's response
-        return response.choices[0].message.content
+        return response.json()["choices"][0]["message"]["content"]
     except Exception as e:
         print(f"Error generating AI response: {e}")
         return "Sorry, I encountered an error while processing your request."
