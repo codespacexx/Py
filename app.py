@@ -15,6 +15,8 @@ CORS(app)  # Enable CORS for all routes
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise ValueError("GROQ_API_KEY environment variable is not set.")
+
+# Initialize Groq client (ensure no extra arguments like 'proxies' are passed)
 client = Groq(api_key=GROQ_API_KEY)
 
 # System prompt for NexusAI
@@ -90,4 +92,5 @@ def internal_error(error):
     return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
+    # Run the app (use `debug=False` in production)
     app.run(debug=True)
