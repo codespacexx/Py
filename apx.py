@@ -1,14 +1,14 @@
 import requests
 
-url = "https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/get-info-rapidapi"
+url = "https://social-download-all-in-one.p.rapidapi.com/v1/social/autolink"
 
-querystring = {"url":"https://www.instagram.com/reel/C1U6tQLu1vv/"}
-
+payload = { "url": "https://www.tiktok.com/@yeuphimzz/video/7237370304337628442" }
 headers = {
 	"x-rapidapi-key": "9c744b1e04msh43b2dea878f2e0ep196409jsn715043e55446",
-	"x-rapidapi-host": "instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com"
+	"x-rapidapi-host": "social-download-all-in-one.p.rapidapi.com",
+	"Content-Type": "application/json"
 }
 
-response = requests.get(url, headers=headers, params=querystring)
+response = requests.post(url, json=payload, headers=headers)
 
 print(response.json())
