@@ -57,7 +57,7 @@ def download_media():
         # Make the request to RapidAPI
         response = requests.get(RAPIDAPI_URL, headers=headers, params=querystring)
         logger.info(f"RapidAPI response status: {response.status_code}")
-        logger.info(f"RapidAPI response: {response.text}")
+        logger.info(f"RapidAPI response: {response.text}")  # Log the full response
 
         # Check if the request was successful
         if response.status_code == 200:
@@ -81,9 +81,17 @@ def download_media():
                         "video_url": data["url"]
                     }
                 }), 200
+            elif "media" in data:  # Check for another alternative field
+                return jsonify({
+                    "status": "success",
+                    "data": {
+                        "video_url": data["media"]
+                    }
+                }), 200
             else:
+                # If no video URL is found, log the entire response for debugging
                 logger.error("No video URL found in RapidAPI response")
-                return jsonify({"error": "No video URL found"}), 404
+                return jsonify({"error": "No video URL found", "response": data}), 404
         else:
             logger.error(f"RapidAPI request failed: {response.status_code}")
             return jsonify({"error": "Failed to fetch data from RapidAPI", "status_code": response.status_code}), response.status_code
