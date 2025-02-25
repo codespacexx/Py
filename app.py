@@ -41,11 +41,8 @@ def download_media():
     Endpoint to handle media download requests.
     """
     try:
-        # Hardcoded URL for testing
-        video_url = "https://www.instagram.com/reel/DGX0zfxCVjm/?igsh=M3UybjN6djJoc283"
-
-        # Log the hardcoded URL
-        logger.info(f"Using hardcoded URL: {video_url}")
+        # Get the URL from the client request
+        video_url = request.form.get('url')
 
         # Validate the URL
         if not video_url or not is_valid_url(video_url):
@@ -75,25 +72,11 @@ def download_media():
             logger.info(f"Full RapidAPI response: {data}")
 
             # Extract the video URL from the RapidAPI response
-            if "video" in data:
+            if "download_url" in data:
                 return jsonify({
                     "status": "success",
                     "data": {
-                        "video_url": data["video"]
-                    }
-                }), 200
-            elif "url" in data:  # Check for alternative field
-                return jsonify({
-                    "status": "success",
-                    "data": {
-                        "video_url": data["url"]
-                    }
-                }), 200
-            elif "media" in data:  # Check for another alternative field
-                return jsonify({
-                    "status": "success",
-                    "data": {
-                        "video_url": data["media"]
+                        "video_url": data["download_url"]
                     }
                 }), 200
             else:
