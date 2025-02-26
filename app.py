@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-import replicate
+from groq import Groq
 import os
 
 # Load environment variables
@@ -11,10 +11,12 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# Initialize Replicate client
-REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
-if not REPLICATE_API_TOKEN:
-    raise ValueError("REPLICATE_API_TOKEN environment variable is not set.")
+# Initialize Groq client
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY environment variable is not set.")
+
+client = Groq(api_key=GROQ_API_KEY)
 
 # System prompt for NexusAI
 SYSTEM_PROMPT = """
@@ -32,26 +34,21 @@ If you don't know the answer, be honest and let the user know.
 Encourage users to ask follow-up questions and strive to make every interaction informative and engaging.
 """
 
-# Function to generate AI response using Replicate and Llama 2 7B Chat
+# Function to generate AI response using Groq and Llama 3
 def generate_ai_response(user_message):
     try:
-        # Prepare the input prompt
-        prompt = f"{SYSTEM_PROMPT}\n\nUser: {user_message}\nNexusAI:"
-
-        # Run the Llama 2 7B Chat model via Replicate
-        output = replicate.run(
-            "meta/llama-2-7b-chat:13c3cdee13ee059ab779f0291d29054dab00a47dad8261375654de5540165fb0",  # Correct model version
-            input={
-                "prompt": prompt,
-                "max_length": 1024,  # Adjust response length
-                "temperature": 0.7,  # Adjust for creativity
-                "top_p": 0.9,        # Adjust for diversity
-            }
+        # Send the user message to Groq API
+        response = client.chat.completions.create(
+            model="llama3-70b-8192",  # Use the Llama 3 70B model on Groq
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message}
+            ],
+            temperature=0.7,  # Adjust for creativity
+            max_tokens=1024,  # Adjust response length
         )
-
-        # Combine the output into a single string
-        response = "".join(output)
-        return response
+        # Extract the AI's response
+        return response.choices[0].message.content
     except Exception as e:
         print(f"Error generating AI response: {e}")
         return f"Sorry, I encountered an error while processing your request. Error: {str(e)}"
