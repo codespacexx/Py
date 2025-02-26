@@ -32,15 +32,15 @@ If you don't know the answer, be honest and let the user know.
 Encourage users to ask follow-up questions and strive to make every interaction informative and engaging.
 """
 
-# Function to generate AI response using Replicate and Llama 2
+# Function to generate AI response using Replicate and Llama 2 7B Chat
 def generate_ai_response(user_message):
     try:
         # Prepare the input prompt
         prompt = f"{SYSTEM_PROMPT}\n\nUser: {user_message}\nNexusAI:"
 
-        # Run the Llama 2 model via Replicate
+        # Run the Llama 2 7B Chat model via Replicate
         output = replicate.run(
-            "meta/llama-2-7b-chat",  # Llama 2 model on Replicate
+            "meta/llama-2-7b-chat",  # Correct model name for Llama 2 7B Chat
             input={
                 "prompt": prompt,
                 "max_length": 1024,  # Adjust response length
@@ -54,7 +54,7 @@ def generate_ai_response(user_message):
         return response
     except Exception as e:
         print(f"Error generating AI response: {e}")
-        return "Sorry, I encountered an error while processing your request."
+        return f"Sorry, I encountered an error while processing your request. Error: {str(e)}"
 
 # Route to handle chat messages
 @app.route('/send_message', methods=['POST'])
