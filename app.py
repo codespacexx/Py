@@ -40,7 +40,7 @@ def generate_ai_response(user_message):
 
         # Run the Llama 2 7B Chat model via Replicate
         output = replicate.run(
-            "meta/llama-2-7b-chat",  # Correct model name for Llama 2 7B Chat
+            "meta/llama-2-7b-chat:13c3cdee13ee059ab779f0291d29054dab00a47dad8261375654de5540165fb0",  # Correct model version
             input={
                 "prompt": prompt,
                 "max_length": 1024,  # Adjust response length
