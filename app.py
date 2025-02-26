@@ -1,8 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch
+import replicate
 import os
 
 # Load environment variables
@@ -12,16 +11,10 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
-# Load Hugging Face model and tokenizer
-MODEL_NAME = "deepseek-ai/DeepSeek-R1"  # Replace with the DeepSeek-R1 model
-HUGGING_FACE_TOKEN = os.getenv("HUGGING_FACE_TOKEN")  # Hugging Face API token
-
-if not HUGGING_FACE_TOKEN:
-    raise ValueError("HUGGING_FACE_TOKEN environment variable is not set.")
-
-# Load the tokenizer and model with authentication
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_auth_token=HUGGING_FACE_TOKEN)
-model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, use_auth_token=HUGGING_FACE_TOKEN)
+# Initialize Replicate client
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
+if not REPLICATE_API_TOKEN:
+    raise ValueError("REPLICATE_API_TOKEN environment variable is not set.")
 
 # System prompt for NexusAI
 SYSTEM_PROMPT = """
@@ -39,30 +32,25 @@ If you don't know the answer, be honest and let the user know.
 Encourage users to ask follow-up questions and strive to make every interaction informative and engaging.
 """
 
-# Function to generate AI response using DeepSeek-R1
+# Function to generate AI response using Replicate and Llama 2
 def generate_ai_response(user_message):
     try:
         # Prepare the input prompt
         prompt = f"{SYSTEM_PROMPT}\n\nUser: {user_message}\nNexusAI:"
 
-        # Tokenize the input
-        inputs = tokenizer(prompt, return_tensors="pt")
+        # Run the Llama 2 model via Replicate
+        output = replicate.run(
+            "meta/llama-2-7b-chat",  # Llama 2 model on Replicate
+            input={
+                "prompt": prompt,
+                "max_length": 1024,  # Adjust response length
+                "temperature": 0.7,  # Adjust for creativity
+                "top_p": 0.9,        # Adjust for diversity
+            }
+        )
 
-        # Generate the response
-        with torch.no_grad():
-            outputs = model.generate(
-                inputs.input_ids,
-                max_length=1024,  # Adjust response length
-                temperature=0.7,  # Adjust for creativity
-                top_p=0.9,        # Adjust for diversity
-                do_sample=True,
-            )
-
-        # Decode the response
-        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-        # Extract only the assistant's response
-        response = response.split("NexusAI:")[-1].strip()
+        # Combine the output into a single string
+        response = "".join(output)
         return response
     except Exception as e:
         print(f"Error generating AI response: {e}")
