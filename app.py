@@ -13,13 +13,13 @@ app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
 # Load Hugging Face model and tokenizer
-MODEL_NAME = "meta-llama/Llama-2-7b-chat-hf"  # Replace with your desired Llama 2 model
+MODEL_NAME = "deepseek-ai/DeepSeek-R1"  # Replace with the DeepSeek-R1 model
 HUGGING_FACE_TOKEN = os.getenv("HUGGING_FACE_TOKEN")  # Hugging Face API token
 
 if not HUGGING_FACE_TOKEN:
     raise ValueError("HUGGING_FACE_TOKEN environment variable is not set.")
 
-# Load the tokenizer and model
+# Load the tokenizer and model with authentication
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_auth_token=HUGGING_FACE_TOKEN)
 model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, use_auth_token=HUGGING_FACE_TOKEN)
 
@@ -39,7 +39,7 @@ If you don't know the answer, be honest and let the user know.
 Encourage users to ask follow-up questions and strive to make every interaction informative and engaging.
 """
 
-# Function to generate AI response using Hugging Face Llama 2
+# Function to generate AI response using DeepSeek-R1
 def generate_ai_response(user_message):
     try:
         # Prepare the input prompt
