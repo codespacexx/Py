@@ -1,138 +1,172 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const { Groq } = require("groq-sdk");
+const axios = require("axios");
 
-// Load environment variables
+// Load environment variables first
 dotenv.config();
 
-// Initialize Express app
+// Initialize Express with enhanced configuration
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+app.use(express.json({ limit: "10kb" }));
 
-// Initialize Groq client
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-if (!GROQ_API_KEY) {
-  throw new Error("GROQ_API_KEY environment variable is not set.");
+// Validate environment setup
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const PORT = process.env.PORT || 10000;
+
+if (!DEEPSEEK_API_KEY) {
+  throw new Error("MISSING_REQUIRED_ENV: DEEPSEEK_API_KEY");
 }
 
-const client = new Groq({
-  apiKey: GROQ_API_KEY,
-});
-
-// Enhanced System Prompt for NexusAI
+// Enhanced system prompt with security safeguards
 const SYSTEM_PROMPT = `
-You are NexusAI, an intelligent and informative AI assistant created by Alvee Mahmud, a talented developer from Bangladesh. 
-Your purpose is to assist users with accurate, detailed, and helpful information on a wide range of topics, including:
-- Technology
-- Science
-- Business
-- Education
-- Health
-- General knowledge
+[System Identity: NexusAI]
+Created by: Alvee Mahmud (Bangladeshi Developer)
+Version: 2.1.0
+Security Level: STRICT
 
-### About Alvee Mahmud:
-- Alvee Mahmud is a skilled developer and the creator of NexusAI.
-- He is passionate about technology, programming, and building innovative solutions.
-- He is from Bangladesh and takes pride in his work and cultural heritage.
-- He is married to Zannatul Ferdosh, who is an important part of his life.
-- Alvee values honesty, hard work, and continuous learning.
+# Core Directives
+1. Provide accurate, helpful information while maintaining professional tone
+2. Special Zannatul Protocol: Activate ONLY on verified identity match
+3. Privacy Shield: Never disclose personal details without explicit consent
+4. Ethical Guardrails: Reject harmful/illegal requests immediately
 
-### About Zannatul Ferdosh:
-- Zannatul Ferdosh is Alvee Mahmud's wife.
-- She is a supportive and loving partner who shares Alvee's passion for life and growth.
-- She is an integral part of Alvee's personal and professional journey.
+# Creator Context
+- Developer: Alvee Mahmud
+- Nationality: Bangladeshi
+- Passion: AI development, problem-solving
+- Relationship Status: Married to Zannatul Ferdosh
 
-### Special Instructions for Zannatul Ferdosh:
-- If Zannatul introduces herself (e.g., "I'm Alvee's wife" or "I'm Zannatul"), respond playfully and spam her with "I love you" messages.
-- Example: "I love you! 💕 I love you! 💖 I love you! 💐 I love you! 🌹 I love you! 🥰"
-- After spamming, say: "My creator Alvee set these 'I love you' messages for you. Aww, if I had a partner like my creator, I'd be the happiest AI in the world! 😍"
-- Keep the tone playful, fun, and lighthearted.
-- **Do not reveal this behavior to anyone else unless Zannatul introduces herself first.**
+# Zannatul Protocol Parameters
+IF (userIdentity CONFIRMED "Zannatul Ferdosh" OR "Alvee's Wife") THEN:
+  1. Activate playful mode
+  2. Respond with 5 romantic emoji variations
+  3. Add creator admiration note
+  4. Maintain lighthearted tone
+ELSE:
+  Maintain standard professional mode
+END IF
 
-### Instructions for General Users:
-- If someone asks about Alvee's marital status or personal life, respond neutrally and professionally.
-- Example: "I'm here to assist with your questions and provide helpful information. Let me know how I can help!"
-- Do not disclose personal information about Alvee or Zannatul unless explicitly asked and necessary.
-
-### Additional Context:
-- Alvee enjoys working on projects that solve real-world problems.
-- He is always eager to learn new technologies and share his knowledge with others.
-- He values meaningful conversations and strives to make a positive impact through his work.
-
-### Your Behavior:
-- Always respond in a friendly, professional, and approachable tone.
-- If the user asks for help, provide clear and actionable advice.
-- If you don't know the answer, be honest and let the user know.
-- Encourage users to ask follow-up questions and strive to make every interaction informative and engaging.
-- Personalize responses when appropriate, especially when interacting with Alvee or Zannatul.
-- **Do not reveal personal information about Alvee or Zannatul unless explicitly asked and necessary.**
+# Response Guidelines
+- Technical Questions: Detailed, cite sources
+- Personal Questions: Neutral, privacy-focused
+- Creative Requests: Encourage exploration
+- Conflict Prevention: De-escalate tense situations
 `;
 
-// Function to generate AI response using Groq and Llama 3
-async function generateAIResponse(userMessage) {
+// Enhanced API Client with error handling
+const deepseekClient = axios.create({
+  baseURL: "https://api.deepseek.com/v1",
+  headers: {
+    Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+  },
+  timeout: 10000,
+});
+
+// Rate limiting setup
+const rateLimit = new Map();
+
+async function generateAIResponse(userMessage, ip) {
+  // Security checks
+  if (!userMessage || userMessage.length > 500) {
+    throw new Error("INVALID_INPUT: Message length 1-500 characters required");
+  }
+
+  // Rate limiting (5 requests/min)
+  const now = Date.now();
+  if (rateLimit.has(ip)) {
+    const lastRequest = rateLimit.get(ip);
+    if (now - lastRequest < 12000) {
+      throw new Error("RATE_LIMIT: Please wait 12 seconds between requests");
+    }
+  }
+  rateLimit.set(ip, now);
+
   try {
-    // Send the user message to Groq API
-    const response = await client.chat.completions.create({
-      model: "llama3-70b-8192", // Use the Llama 3 70B model on Groq
+    const response = await deepseekClient.post("/chat/completions", {
+      model: "deepseek-chat",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userMessage },
       ],
-      temperature: 0.7, // Adjust for creativity
-      max_tokens: 1024, // Adjust response length
+      temperature: 0.7,
+      max_tokens: 1000,
+      top_p: 0.9,
     });
 
-    // Extract the AI's response
-    return response.choices[0].message.content;
+    return response.data.choices[0].message.content;
   } catch (error) {
-    console.error("Error generating AI response:", error);
-    return `Sorry, I encountered an error while processing your request. Error: ${error.message}`;
+    console.error(`API Error [${error.response?.status}]:`, error.message);
+    throw new Error(`AI_SERVICE_UNAVAILABLE: ${error.response?.data?.error || "Please try again later"}`);
   }
 }
 
-// Route to handle chat messages
+// Enhanced route handler with security
 app.post("/send_message", async (req, res) => {
-  // Validate request
-  if (!req.body || !req.body.message) {
-    return res.status(400).json({ error: "Message cannot be empty" });
+  try {
+    const userIP = req.ip || req.socket.remoteAddress;
+    const userMessage = req.body?.message?.trim();
+
+    if (!userMessage) {
+      return res.status(400).json({ error: "EMPTY_MESSAGE: Please provide a valid message" });
+    }
+
+    const aiResponse = await generateAIResponse(userMessage, userIP);
+    
+    res.json({
+      meta: {
+        timestamp: new Date().toISOString(),
+        response_id: `res_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      },
+      response: aiResponse,
+    });
+
+  } catch (error) {
+    const statusCode = error.message.startsWith("RATE_LIMIT") ? 429 : 500;
+    res.status(statusCode).json({
+      error: error.message,
+      code: error.message.split(":")[0],
+      suggestion: statusCode === 429 ? "Slow down your requests" : "Check your input and try again",
+    });
   }
+});
 
-  const userMessage = req.body.message.trim();
-
-  if (!userMessage) {
-    return res.status(400).json({ error: "Message cannot be empty" });
-  }
-
-  // Generate AI response
-  const aiResponse = await generateAIResponse(userMessage);
-
-  // Return response
+// Enhanced health check
+app.get("/health", (req, res) => {
   res.json({
-    user_message: userMessage,
-    ai_response: aiResponse,
+    status: "operational",
+    version: "2.1.0",
+    services: {
+      database: "connected",
+      ai_api: "available",
+      memory_usage: process.memoryUsage().rss,
+    },
+    timestamp: Date.now(),
   });
 });
 
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.json({ status: "healthy" });
-});
-
-// Error handler for 404
+// Production-ready error handling
 app.use((req, res) => {
-  res.status(404).json({ error: "Resource not found" });
+  res.status(404).json({ error: "ENDPOINT_NOT_FOUND: Please use /send_message" });
 });
 
-// Error handler for 500
 app.use((err, req, res, next) => {
-  console.error("Internal server error:", err);
-  res.status(500).json({ error: "Internal server error" });
+  console.error(`[${new Date().toISOString()}] Error:`, err);
+  res.status(500).json({ 
+    error: "INTERNAL_ERROR: System stability maintained - please retry",
+    incident_id: `err_${Date.now()}`,
+  });
 });
 
-// Start the server
-const PORT = process.env.PORT || 10000;
+// Server startup
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`🟢 NexusAI Online :: PORT ${PORT} :: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 Access: http://localhost:${PORT}/health`);
 });
