@@ -1,23 +1,36 @@
 {
   "name": "nexus-ai-backend",
-  "version": "1.0.0",
-  "description": "Backend for NexusAI using Node.js, Express.js, and Groq",
+  "version": "2.0.0", // Updated version to reflect major changes
+  "description": "Backend for NexusAI using Node.js, Express.js, and DeepSeek API",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint .", // Added linting for code quality
+    "format": "prettier --write ." // Added formatting for consistency
   },
-  "keywords": [],
+  "keywords": [
+    "AI",
+    "DeepSeek",
+    "Node.js",
+    "Express.js",
+    "NexusAI"
+  ],
   "author": "Your Name <your.email@example.com>",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "groq-sdk": "^0.5.0"
+    "axios": "^1.6.2" // Added axios for DeepSeek API requests
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "eslint": "^8.56.0", // Added ESLint for linting
+    "prettier": "^3.2.4" // Added Prettier for code formatting
+  },
+  "engines": {
+    "node": ">=18.0.0" // Specified Node.js version for compatibility
   }
 }
