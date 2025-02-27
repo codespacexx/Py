@@ -8,7 +8,7 @@ const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 
 async function generateAIResponse(userMessage) {
   const payload = {
-    model: "deepseek-model",
+    model: "deepseek-model", // Replace with the correct model name
     messages: [
       { role: "system", content: "You are a helpful assistant." },
       { role: "user", content: userMessage },
@@ -26,7 +26,11 @@ async function generateAIResponse(userMessage) {
     });
     return response.data.choices[0].message.content;
   } catch (error) {
-    console.error("API Error:", error.response?.data || error.message);
+    console.error("API Error Details:", {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
     return "Sorry, I encountered an error while processing your request.";
   }
 }
