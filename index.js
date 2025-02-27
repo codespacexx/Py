@@ -1,11 +1,10 @@
-// server.js
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
 const { body, validationResult } = require("express-validator");
-const { Groq } = require("groq-sdk");
+const axios = require("axios"); // Using axios for API calls
 const dotenv = require("dotenv");
 const winston = require("winston");
 const httpErrors = require("http-errors");
@@ -107,13 +106,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// 9. Groq Client Configuration
-const groqClient = new Groq({
-  apiKey: env.GROQ_API_KEY,
-  timeout: 30000
-});
-
-// 10. System Prompt Configuration
+// 9. System Prompt Configuration
 const SYSTEM_PROMPT = `
 You are NexusAI, an advanced AI assistant created by Alvee Mahmud, a skilled developer from Bangladesh. 
 Your capabilities include providing expert-level assistance in:
@@ -152,30 +145,39 @@ Ethical Framework:
 - Reject harmful/illegal requests with policy citation
 `.replace(/\n/g, " ").trim();
 
-// 11. AI Service Implementation
+// 10. AI Service Implementation
 class AIService {
-  constructor(client) {
-    this.client = client;
+  constructor(apiKey) {
+    this.apiKey = apiKey;
+    this.baseURL = "https://api.groq.com/v1"; // Replace with actual Groq API URL
   }
 
   async generateResponse(userMessage) {
     try {
-      const completion = await this.client.chat.completions.create({
-        model: "llama3-70b-8192",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userMessage }
-        ],
-        temperature: 0.7,
-        max_tokens: 1024,
-        top_p: 1.0
-      });
+      const response = await axios.post(
+        `${this.baseURL}/chat/completions`,
+        {
+          model: "llama3-70b-8192",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userMessage }
+          ],
+          temperature: 0.7,
+          max_tokens: 1024
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
 
-      if (!completion.choices[0]?.message?.content) {
+      if (!response.data.choices[0]?.message?.content) {
         throw new Error("Empty AI response");
       }
 
-      return completion.choices[0].message.content;
+      return response.data.choices[0].message.content;
     } catch (error) {
       logger.error(`AI Service Failure: ${error.message}`, { stack: error.stack });
       throw httpErrors(503, "AI processing unavailable");
@@ -183,9 +185,9 @@ class AIService {
   }
 }
 
-const aiService = new AIService(groqClient);
+const aiService = new AIService(env.GROQ_API_KEY);
 
-// 12. Validation Middleware
+// 11. Validation Middleware
 const chatValidation = [
   body("message")
     .trim()
@@ -195,7 +197,7 @@ const chatValidation = [
     .customSanitizer(value => value.replace(/\s+/g, " "))
 ];
 
-// 13. API Endpoints
+// 12. API Endpoints
 app.post("/api/v1/chat", apiLimiter, chatValidation, async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -220,7 +222,7 @@ app.post("/api/v1/chat", apiLimiter, chatValidation, async (req, res, next) => {
   }
 });
 
-// 14. Health Check Endpoint
+// 13. Health Check Endpoint
 app.get("/api/v1/health", (req, res) => {
   res.json({
     status: "operational",
@@ -237,7 +239,7 @@ app.get("/api/v1/health", (req, res) => {
   });
 });
 
-// 15. Error Handling
+// 14. Error Handling
 app.use((req, res, next) => {
   next(httpErrors(404, "Resource not found"));
 });
@@ -264,12 +266,12 @@ app.use((err, req, res, next) => {
   res.status(status).json(response);
 });
 
-// 16. Server Initialization
+// 15. Server Initialization
 const server = app.listen(env.PORT, () => {
   logger.info(`Server instance ${process.pid} active on port ${env.PORT}`);
 });
 
-// 17. Graceful Shutdown
+// 16. Graceful Shutdown
 const shutdown = async (signal) => {
   logger.info(`Received ${signal}, terminating gracefully`);
   server.close(() => {
