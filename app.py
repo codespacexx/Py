@@ -71,7 +71,7 @@ def download_media():
             logger.info(f"Full RapidAPI response: {data}")
 
             # Extract the video URL from the RapidAPI response
-            if "url" in data:  # Use "url" instead of "download_url"
+            if "url" in data:  # Check for "url" field
                 return jsonify({
                     "status": "success",
                     "data": {
@@ -83,7 +83,11 @@ def download_media():
                 return jsonify({"error": "No video URL found", "response": data}), 404
         else:
             logger.error(f"RapidAPI request failed: {response.status_code}")
-            return jsonify({"error": "Failed to fetch data from RapidAPI", "status_code": response.status_code}), response.status_code
+            return jsonify({
+                "error": "Failed to fetch data from RapidAPI",
+                "status_code": response.status_code,
+                "message": data.get("message", "Unknown error")
+            }), response.status_code
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Network error: {str(e)}")
