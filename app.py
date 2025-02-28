@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response, stream_with_context
 from dotenv import load_dotenv
 from urllib.parse import urlparse
 import requests
@@ -15,8 +15,8 @@ CORS(app)  # Enable CORS for all routes
 
 # RapidAPI credentials
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
-RAPIDAPI_HOST = "all-media-downloader1.p.rapidapi.com"
-RAPIDAPI_URL = "https://all-media-downloader1.p.rapidapi.com/all"
+RAPIDAPI_HOST = "social-download-all-in-one.p.rapidapi.com"
+RAPIDAPI_URL = "https://social-download-all-in-one.p.rapidapi.com/v1/social/autolink"
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -26,67 +26,58 @@ logger = logging.getLogger(__name__)
 def is_valid_url(url):
     try:
         result = urlparse(url)
-        # Check if the URL has a scheme (http/https) and a netloc (domain)
-        if all([result.scheme, result.netloc]):
-            return True
-        return False
+        return all([result.scheme, result.netloc])
     except:
         return False
 
 @app.route('/download', methods=['POST'])
 def download_media():
     """
-    Endpoint to handle media download requests.
+    Endpoint to get the video URL.
     """
     try:
-        # Get the URL from the client request
         video_url = request.form.get('url')
-
-        # Validate the URL
         if not video_url or not is_valid_url(video_url):
             logger.error("Invalid or missing URL")
             return jsonify({"error": "A valid URL is required"}), 400
 
-        # Log the request
         logger.info(f"Processing request for URL: {video_url}")
 
-        # Prepare the headers and payload for the RapidAPI request
         headers = {
             "x-rapidapi-key": RAPIDAPI_KEY,
             "x-rapidapi-host": RAPIDAPI_HOST,
-            "Content-Type": "application/x-www-form-urlencoded"
+            "Content-Type": "application/json"
         }
         payload = {"url": video_url}
 
-        # Make the request to RapidAPI
-        response = requests.post(RAPIDAPI_URL, data=payload, headers=headers)
+        response = requests.post(RAPIDAPI_URL, json=payload, headers=headers)
         logger.info(f"RapidAPI response status: {response.status_code}")
-        logger.info(f"RapidAPI response: {response.text}")  # Log the full response
 
-        # Check if the request was successful
         if response.status_code == 200:
             data = response.json()
-
-            # Debug: Log the entire response
             logger.info(f"Full RapidAPI response: {data}")
 
-            # Extract the video URL from the RapidAPI response
-            if "url" in data:  # Check for "url" field
-                return jsonify({
-                    "status": "success",
-                    "data": {
-                        "video_url": data["url"]  # Use "url" here
-                    }
-                }), 200
+            if "medias" in data and len(data["medias"]) > 0:
+                media = data["medias"][0]
+                if "url" in media:
+                    return jsonify({
+                        "status": "success",
+                        "data": {
+                            "video_url": media["url"]
+                        }
+                    }), 200
+                else:
+                    logger.error("No video URL found in the media item")
+                    return jsonify({"error": "No video URL found in the media item", "response": data}), 404
             else:
-                logger.error("No video URL found in RapidAPI response")
-                return jsonify({"error": "No video URL found", "response": data}), 404
+                logger.error("No media found in RapidAPI response")
+                return jsonify({"error": "No media found", "response": data}), 404
         else:
             logger.error(f"RapidAPI request failed: {response.status_code}")
             return jsonify({
                 "error": "Failed to fetch data from RapidAPI",
                 "status_code": response.status_code,
-                "message": data.get("message", "Unknown error")
+                "message": response.text
             }), response.status_code
 
     except requests.exceptions.RequestException as e:
@@ -96,6 +87,38 @@ def download_media():
         logger.error(f"Unexpected error: {str(e)}")
         return jsonify({"error": "An unexpected error occurred", "details": str(e)}), 500
 
+@app.route('/download-file', methods=['POST'])
+def download_file():
+    """
+    Endpoint to stream the video file directly.
+    """
+    try:
+        video_url = request.form.get('url')
+        if not video_url or not is_valid_url(video_url):
+            logger.error("Invalid or missing URL")
+            return jsonify({"error": "A valid URL is required"}), 400
+
+        # Stream the video file from the URL
+        response = requests.get(video_url, stream=True)
+
+        # Forward headers to allow the browser to download the file
+        headers = {
+            "Content-Disposition": f"attachment; filename=video.mp4",
+            "Content-Type": response.headers.get("Content-Type", "video/mp4")
+        }
+
+        return Response(
+            stream_with_context(response.iter_content(chunk_size=8192)),
+            headers=headers,
+            status=response.status_code
+        )
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error: {str(e)}")
+        return jsonify({"error": "Network error occurred", "details": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        return jsonify({"error": "An unexpected error occurred", "details": str(e)}), 500
+
 if __name__ == '__main__':
-    # Run the app in production mode
     app.run(host='0.0.0.0', port=5000)
